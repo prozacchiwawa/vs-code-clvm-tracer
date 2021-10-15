@@ -5,21 +5,86 @@ import { render } from 'react-dom'
 
 import { createElmishComponent } from '@ts-elmish/react'
 
-export const Effects = {
-};
+function sender(dispatch,f) {
+	return (e) => dispatch(f(e));
+}
 
-let e1 = document.createElement('h1');
-e1.appendChild(document.createTextNode('foo'));
-document.getElementById('app').appendChild(e1);
-
-
-const App = createElmishComponent({
-	init: () => [{count: 0}, []],
-	update: (state, action) => [state, []],
-	view: () => {
-		return <h1>Hi there</h1>;
+const LineOfCode = createElmishComponent({
+	init: (l) => {
+		return [l, []];
+	},
+	update: (state, action) => { return [state, []]; },
+	view: state => {
+		return <pre>{state.code}</pre>;
 	}
 });
 
-// eslint-disable-next-line functional/no-expression-statement
-render(<App />, document.getElementById('app'));
+const LinesOfCode = createElmishComponent({
+	init: (arg) => {
+		console.log('LinesOfCode', arg);
+		return [{code: arg.code}, []];
+	},
+	update: (state, action) => { return [state, []]; },
+	view: state => {
+		return <div className='code'>
+			<h1>Code</h1>
+			{state.code.map((l) => { return <LineOfCode code={l} />; })}
+		</div>;
+	}
+});
+
+const TraceEntry = createElmishComponent({
+	init: (l) => {
+		return [l, []];
+	},
+	update: (state, action) => { return [state, []]; },
+	view: state => {
+		return <pre>{JSON.stringify(state.entry)}</pre>;
+	}
+});
+
+const Navigation = createElmishComponent({
+	init: (trace) => {
+		return [trace, []];
+	},
+	update: (state, action) => { 
+		return [state, []]; 
+	},
+	view: state => {
+		return <div className='nav'>
+			<h1>Expression</h1>
+			{state.trace.map((l) => { return <TraceEntry entry={l} />; })}
+		</div>
+	}
+});
+
+const App = createElmishComponent({
+	init: (code) => {
+		console.log('App', code);
+		return [code, []];
+	},
+	update: (state, action) => { 
+		console.log(action);
+		return [state, []]; 
+	},
+	view: state => {
+		return <div id='root'>
+			<Navigation trace={state.trace} />
+			<LinesOfCode code={state.content} />
+		</div>
+	}
+});
+
+setTimeout(() => {
+	console.log(vscode);
+	vscode.postMessage({'data': 'started'});
+}, 0);
+
+let rendered = false;
+window.addEventListener('message', (evt) => {
+	console.log('window', evt);
+	if (!rendered && evt.data.content) {
+		// eslint-disable-next-line functional/no-expression-statement
+		render(<App trace={evt.data.trace} content={evt.data.content} />, document.getElementById('app'));
+	}
+});

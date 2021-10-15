@@ -1,12 +1,6 @@
-import { privateEncrypt } from 'crypto';
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-
-const cats = {
-	'Coding Cat': 'https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
-	'Compiling Cat': 'https://media.giphy.com/media/mlvseq9yvZhba/giphy.gif',
-	'Testing Cat': 'https://media.giphy.com/media/3oriO0OEd9QIDdllqo/giphy.gif'
-};
+import { trace } from 'console';
 
 class TraceEntry {
 	file: string;
@@ -80,9 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('catCoding.doRefactor', () => {
-			if (CatCodingPanel.currentPanel) {
-				CatCodingPanel.currentPanel.doRefactor();
-			}
+			console.log('doRefactor');
 		})
 	);
 
@@ -124,13 +116,11 @@ class CatCodingPanel {
 	private readonly _extensionUri: vscode.Uri;
 	private readonly _traceData: Array<TraceEntry>;
 	private readonly _filecontent: Array<string>;
-	private _selected: TraceEntry | undefined;
 	private _rendered = false;
-
+	private _enqueued: Array<any>|null = [];
 	private _disposables: vscode.Disposable[] = [];
 
 	public static createOrShow(extensionUri: vscode.Uri, traceData: Array<TraceEntry>, filecontent: Array<string>) {
-		console.log('createOrShow');
 		const column = vscode.window.activeTextEditor
 			? vscode.window.activeTextEditor.viewColumn
 			: undefined;
@@ -144,7 +134,7 @@ class CatCodingPanel {
 		// Otherwise, create a new panel.
 		const panel = vscode.window.createWebviewPanel(
 			CatCodingPanel.viewType,
-			'Cat Coding',
+			'CLVM Trace',
 			column || vscode.ViewColumn.One,
 			getWebviewOptions(extensionUri),
 		);
@@ -156,11 +146,31 @@ class CatCodingPanel {
 		CatCodingPanel.currentPanel = new CatCodingPanel(panel, extensionUri, [], []);
 	}
 
+	private spillMessages() {
+		if (this._enqueued === null) {
+			return;
+		}
+
+		const enqueued = this._enqueued;
+		this._enqueued = null;
+		for (let i = 0; i < enqueued.length; i++) {
+			this._panel.webview.postMessage(enqueued[i]);
+		}
+	}
+
 	private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, traceData: Array<TraceEntry>, filecontent: Array<string>) {
 		this._panel = panel;
 		this._extensionUri = extensionUri;
 		this._traceData = traceData;
 		this._filecontent = filecontent;
+
+		const messageData = {
+			"trace": this._traceData,
+			"content": this._filecontent
+		};
+
+		console.log('sending start message');
+		this._enqueueOrSend(messageData);
 
 		// Set the webview's initial html content
 		this._update();
@@ -171,11 +181,7 @@ class CatCodingPanel {
 
 		// Update the content based on view changes
 		this._panel.onDidChangeViewState(
-			e => {
-				if (this._panel.visible) {
-					this._update();
-				}
-			},
+			e => { console.log('changeViewState'); },
 			null,
 			this._disposables
 		);
@@ -183,21 +189,13 @@ class CatCodingPanel {
 		// Handle messages from the webview
 		this._panel.webview.onDidReceiveMessage(
 			message => {
-				switch (message.command) {
-					case 'alert':
-						vscode.window.showErrorMessage(message.text);
-						return;
-				}
+				console.log(message);
+				this._enqueueOrSend({"test":"test"});
+				this.spillMessages();
 			},
 			null,
 			this._disposables
 		);
-	}
-
-	public doRefactor() {
-		// Send a message to the webview webview.
-		// You can send any JSON serializable data.
-		this._panel.webview.postMessage({ command: 'refactor' });
 	}
 
 	public dispose() {
@@ -215,40 +213,27 @@ class CatCodingPanel {
 	}
 
 	private _update() {
-		const webview = this._panel.webview;
-
 		// Vary the webview's content based on where it is located in the editor.
-		switch (this._panel.viewColumn) {
-			case vscode.ViewColumn.Two:
-				this._updateForCat(webview, 'Compiling Cat');
-				return;
-
-			case vscode.ViewColumn.Three:
-				this._updateForCat(webview, 'Testing Cat');
-				return;
-
-			case vscode.ViewColumn.One:
-			default:
-				this._updateForCat(webview, 'Coding Cat');
-				return;
-		}
-	}
-
-	private _updateForCat(webview: vscode.Webview, catName: keyof typeof cats) {
 		if (!this._rendered) {
-			this._panel.title = catName;
-			this._panel.webview.html = this._getHtmlForWebview(webview);
+			this._panel.title = 'CLVM Trace';
+			this._panel.webview.html = this._getHtmlForWebview();
 		}
 	}
 
-	private _getHtmlForWebview(webview: vscode.Webview): string {
-		const mediaPath = vscode.Uri.joinPath(this._extensionUri, 'media');
+	private _enqueueOrSend(data: any) {
+		if (this._enqueued === null) {
+			this._panel.webview.postMessage(data);
+		} else {
+			this._enqueued.push(data);
+		}
+	}
+
+	private _getHtmlForWebview(): string {
 		const scriptPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'out', 'main.js');
 		const indexPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'out', 'index.html');
 
 		// Use a nonce to only allow specific scripts to be run
 		const nonce = getNonce();
-		const tt_set: Array<string> = [];
 
 		try {
 			const script = fs.readFileSync(scriptPath.fsPath).toString('base64');
