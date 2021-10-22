@@ -1,34 +1,69 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { trace } from 'console';
+import { privateEncrypt } from 'crypto';
 
 class TraceEntry {
-	file: string;
-	line: number;
-	col: number;
-	arglist: string;
-	outcome: string;
+	label = "";
+	file = "";
+	line = 0;
+	col = 0;
+	until_line = 0;
+	until_col = 0;
+	content = "";
 
-	constructor(file: string, line: number, col: number, arglist: string, outcome: string) {
-		this.file = file;
-		this.line = line;
-		this.col = col;
-		this.arglist = arglist;
-		this.outcome = outcome;
-	}
-}
+	constructor(line: string) {
+		this.content = line.trim();
+		const match_srcloc = /^-([^()]+)[(]([0-9]+)[)]:([0-9]+)$/;
+		const preparing_match_re = /^Preparing operator: ([^()]+)[(]([0-9]+)[)]:([0-9]+)(-[^()]+[(][0-9]+[)]:[0-9]+)? (.*)$/;
+		const arg_match_re = /^- ([^()]+)[(]([0-9]+)[)]:([0-9]+)(-[^()]+[(][0-9]+[)]:[0-9]+)? (.*)$/;
+		const result_match_re = /^Result: ([^()]+)[(]([0-9]+)[)]:([0-9]+)(-[^()]+[(][0-9]+[)]:[0-9]+)? (.*)$/;
 
-function parse_line(s: string): TraceEntry|undefined {
-	const trimmed = s.trim();
-	if (trimmed.length == 0) {
-		return;
-	}
+		const plant_simple_match = (label: string) => {
+			return (matched: RegExpMatchArray) => {
+				console.log('matched', matched);
+				this.label = "operator";
+				this.file = matched[1];
+				this.line = parseInt(matched[2]);
+				this.col = parseInt(matched[3]);
+				if (matched.length == 6) {
+					const submatch = matched[4].match(match_srcloc);
+					console.log('submatch', submatch);
+					if (submatch) {
+						this.until_line = parseInt(submatch[2]);
+						this.until_col = parseInt(submatch[3]);
+					}
+				}
+			};
+		};
 
-	const match_re = /[(]"([^()]+)[(]([0-9]+)[)]:([0-9]+).*".*[)] => (.*).*/;
-	const matched_trim = trimmed.match(match_re);
+		const match_actions = [
+			{
+				"re": preparing_match_re,
+				"action": plant_simple_match("operator")
+			},
+			{
+				"re": arg_match_re,
+				"action": plant_simple_match("argument")
+			},
+			{
+				"re": result_match_re,
+				"action": plant_simple_match("result")
+			}
+		];
 
-	if (matched_trim) {
-		return new TraceEntry(matched_trim[1], +matched_trim[2], +matched_trim[3], "", matched_trim[4]);
+		for (let i = 0; i < match_actions.length; i++) {
+			const m = match_actions[i];
+			const matched = this.content.match(m.re);
+			if (matched) {
+				try {
+					m.action(matched);
+				} catch(e) {
+					console.log('exn',e);
+				}
+				break;
+			}
+		}
 	}
 }
 
@@ -44,10 +79,10 @@ export function activate(context: vscode.ExtensionContext) {
 			const filecontent: Array<string> = [];
 
 			for (let i = 1; i < iters; i++) {
-				const traced = parse_line(trace_lines[i]);
-				if (traced) {
-					file = traced.file;
-					trace_entries.push(traced);
+				const te = new TraceEntry(trace_lines[i]);
+				trace_entries.push(te);
+				if (te.file !== "" && te.file.charAt(0) !== '*') {
+					file = te.file;
 				}
 			}
 

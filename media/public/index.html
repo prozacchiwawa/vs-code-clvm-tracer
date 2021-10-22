@@ -24,12 +24,40 @@
 				position: relative;
 				display: flex;
 				flex-direction: column;
+				width: 40%;
+				height: 100vh;
+				overflow: auto;
 			}
 
 			.code {
 				position: relative;
 				display: flex;
 				flex-direction: column;
+				height: 100vh;
+				overflow: auto;
+			}
+
+			.lineselected {
+				background: #363;
+				font: monospace;
+			}
+
+			.lineunselected {
+				font: monospace;				
+			}
+
+			.colsunselected {
+				display: inline-block;
+			}
+
+			.colsselected {
+				color: red;
+				display: inline-block;
+			}
+
+			.colsnormal {
+				color: #ccc;
+				display: inline-block;
 			}
 		</style>
 	</head>
