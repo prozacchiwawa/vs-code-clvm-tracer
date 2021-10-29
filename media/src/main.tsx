@@ -16,7 +16,7 @@ const LineOfCode = createElmishComponent({
 	},
 	update: (state, action) => { return [state, []]; },
 	view: state => {
-		if (state.selection) {
+		if (state.selection && state.selection.file == state.file) {
 			const lineParts = [];
 			if (state.selection.col >= 1) {
 				lineParts.push(state.code.substring(0, state.selection.col - 1));
@@ -61,7 +61,7 @@ const LinesOfCode = createElmishComponent({
 	view: state => {
 		return <div className='code'>
 			<h1>Code</h1>
-			{state.code.map((l,i) => { return <LineOfCode selection={selectedLine(state.selection, i)} code={l} />; })}
+			{state.code.map((l,i) => { return <LineOfCode file={state.file} selection={selectedLine(state.selection, i)} code={l} />; })}
 		</div>;
 	}
 });
@@ -71,15 +71,14 @@ const TraceEntry = createElmishComponent({
 		return [l, []];
 	},
 	update: (state, action) => { 
-		console.log('TraceEntry action', action);
 		return [state, []]; 
 	},
 	view: state => {
-		const classname = state.selected ? 'nav-item' : 'nav-item-selected';
+		const classname = state.selected ? 'nav-item-selected' : 'nav-item';
 		if (state.entry.file !== "") {
-			return <span className={classname}><a onClick={() => {state.parent([{select:state.entry}])}}>{state.entry.content}</a></span>;
+			return <span className={classname}><a onClick={() => {state.parent([{select:state.entry}])}}><pre>{state.entry.content}</pre></a></span>;
 		} else {
-			return <span className={classname}>{state.entry.content}</span>;
+			return <span className={classname}><pre>{state.entry.content}</pre></span>;
 		}
 	}
 });
@@ -94,8 +93,9 @@ const Navigation = createElmishComponent({
 	view: state => {
 		return <div className='nav'>
 			<h1>Expression</h1>
-			{state.trace.map((l) => {
-				if (state.selection === l.entry) {
+			{state.trace.map((l,idx) => {
+				if (state.selection && state.selection.idx === l.idx) {
+					console.log(this, state.selection);
 					return <TraceEntry selected={true} entry={l} parent={state.parent} />; 
 				} else {
 					return <TraceEntry selected={false} entry={l} parent={state.parent} />;
@@ -124,21 +124,31 @@ const App = createElmishComponent({
 		console.log('selection', JSON.stringify(state.selection));
 		return <div id='root'>
 			<Navigation selection={state.selection} trace={state.trace} parent={state.dispatch} />
-			<LinesOfCode selection={state.selection} code={state.content} />
+			<LinesOfCode selection={state.selection} file={state.file} code={state.content} />
 		</div>
 	}
 });
 
+let rendered = false;
+function renderView(state) {
+	vscode.setState(state);
+	// eslint-disable-next-line functional/no-expression-statement
+	render(<App file={state.file} trace={state.trace} content={state.content} />, document.getElementById('app'));
+}
+
 setTimeout(() => {
 	console.log(vscode);
-	vscode.postMessage({'data': 'started'});
+	const state: any = vscode.getState();
+	if (state && state.content) {
+		renderView(state);
+	} else {
+		vscode.postMessage({'data': 'started'});
+	}
 }, 0);
 
-let rendered = false;
 window.addEventListener('message', (evt) => {
 	console.log('window', evt);
 	if (!rendered && evt.data.content) {
-		// eslint-disable-next-line functional/no-expression-statement
-		render(<App trace={evt.data.trace} content={evt.data.content} />, document.getElementById('app'));
+		renderView(evt.data);
 	}
 });

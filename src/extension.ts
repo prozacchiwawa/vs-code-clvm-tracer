@@ -1,9 +1,14 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { parse, stringify } from 'yaml';
 import { trace } from 'console';
 import { privateEncrypt } from 'crypto';
 
+const match_srcloc = /^([^()]+)[(]([0-9]+)[)]:([0-9]+)(-([^()]+)[(]([0-9]+)[)]:([0-9]+))?$/;
+
 class TraceEntry {
+	entry: any;
+	idx = 0;
 	label = "";
 	file = "";
 	line = 0;
@@ -12,57 +17,45 @@ class TraceEntry {
 	until_col = 0;
 	content = "";
 
-	constructor(line: string) {
-		this.content = line.trim();
-		const match_srcloc = /^-([^()]+)[(]([0-9]+)[)]:([0-9]+)$/;
-		const preparing_match_re = /^Preparing operator: ([^()]+)[(]([0-9]+)[)]:([0-9]+)(-[^()]+[(][0-9]+[)]:[0-9]+)? (.*)$/;
-		const arg_match_re = /^- ([^()]+)[(]([0-9]+)[)]:([0-9]+)(-[^()]+[(][0-9]+[)]:[0-9]+)? (.*)$/;
-		const result_match_re = /^Result: ([^()]+)[(]([0-9]+)[)]:([0-9]+)(-[^()]+[(][0-9]+[)]:[0-9]+)? (.*)$/;
+	takeUntil(matched: RegExpMatchArray) {
+		// 5 - repeated file name
+		this.until_line = parseInt(matched[6]);
+		this.until_col = parseInt(matched[7]);
+	}
 
-		const plant_simple_match = (label: string) => {
-			return (matched: RegExpMatchArray) => {
-				console.log('matched', matched);
-				this.label = "operator";
+	constructor(i: number, entry: any) {
+		this.idx = i;
+
+		this.entry = entry;
+		delete this.entry.Env;
+		if (entry['Operator'] === '2') {
+			delete this.entry.Arguments;
+		}
+		this.content = stringify(this.entry);
+
+		const oploc = entry['Operator-Location'];
+		const resloc = entry['Result-Location'];
+		let matched: RegExpMatchArray|undefined = undefined;
+
+		try {
+			if (resloc) {
+				matched = resloc.match(match_srcloc);
+			}
+			if (!matched && oploc) {
+				matched = oploc.match(match_srcloc);
+			}
+			if (matched) {
 				this.file = matched[1];
 				this.line = parseInt(matched[2]);
 				this.col = parseInt(matched[3]);
-				if (matched.length == 6) {
-					const submatch = matched[4].match(match_srcloc);
-					console.log('submatch', submatch);
-					if (submatch) {
-						this.until_line = parseInt(submatch[2]);
-						this.until_col = parseInt(submatch[3]);
-					}
-				}
-			};
-		};
-
-		const match_actions = [
-			{
-				"re": preparing_match_re,
-				"action": plant_simple_match("operator")
-			},
-			{
-				"re": arg_match_re,
-				"action": plant_simple_match("argument")
-			},
-			{
-				"re": result_match_re,
-				"action": plant_simple_match("result")
+				this.takeUntil(matched);
 			}
-		];
-
-		for (let i = 0; i < match_actions.length; i++) {
-			const m = match_actions[i];
-			const matched = this.content.match(m.re);
-			if (matched) {
-				try {
-					m.action(matched);
-				} catch(e) {
-					console.log('exn',e);
-				}
-				break;
-			}
+		} catch(e) {
+			this.file = '*error-parsing-srcloc*';
+			this.line = 0;
+			this.col = 0;
+			this.until_line = 0;
+			this.until_col = 0;
 		}
 	}
 }
@@ -71,18 +64,32 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('catCoding.start', () => {
 			const tracetext = vscode.window.activeTextEditor?.document.getText();
-			const lines = tracetext?.split('\n');
-			const trace_lines = lines ? lines : [];
 			const trace_entries: Array<TraceEntry> = [];
-			const iters = lines ? lines.length : 0;
 			let file = "";
 			const filecontent: Array<string> = [];
+			let parsed_yaml: Array<any> = [];
+			
+			console.log(tracetext);
+			if (tracetext) {
+				console.log('parsing yaml');
+				try {
+					const yaml_result = parse(tracetext);
+					if (yaml_result) {
+						parsed_yaml = yaml_result;
+					} else {
+						parsed_yaml = [];
+					}
+				} catch(e) {
+					console.log(e);
+				}
+			}
 
-			for (let i = 1; i < iters; i++) {
-				const te = new TraceEntry(trace_lines[i]);
-				trace_entries.push(te);
-				if (te.file !== "" && te.file.charAt(0) !== '*') {
-					file = te.file;
+			const iters = parsed_yaml.length;
+			for (let i = 0; i < iters; i++) {
+				const entry = new TraceEntry(i, parsed_yaml[i]);
+				trace_entries[i] = entry;
+				if (entry.file && entry.file.charAt(0) != '*' && file === '') {
+					file = entry.file;
 				}
 			}
 
@@ -99,17 +106,11 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 						const split = fdata.split('\n');
 						if (split) {
-							CatCodingPanel.createOrShow(context.extensionUri, trace_entries, split);
+							CatCodingPanel.createOrShow(context.extensionUri, trace_entries, file, split);
 						}
 					});
 				}
 			}
-		})
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand('catCoding.doRefactor', () => {
-			console.log('doRefactor');
 		})
 	);
 
@@ -120,7 +121,7 @@ export function activate(context: vscode.ExtensionContext) {
 				console.log(`Got state: ${state}`);
 				// Reset the webview options so we use latest uri for `localResourceRoots`.
 				webviewPanel.webview.options = getWebviewOptions(context.extensionUri);
-				CatCodingPanel.revive(webviewPanel, context.extensionUri);
+				CatCodingPanel.revive(webviewPanel, context.extensionUri, state.trace, state.file, state.content);
 			}
 		});
 	}
@@ -151,11 +152,12 @@ class CatCodingPanel {
 	private readonly _extensionUri: vscode.Uri;
 	private readonly _traceData: Array<TraceEntry>;
 	private readonly _filecontent: Array<string>;
+	private readonly _file: string = "";
 	private _rendered = false;
 	private _enqueued: Array<any>|null = [];
 	private _disposables: vscode.Disposable[] = [];
 
-	public static createOrShow(extensionUri: vscode.Uri, traceData: Array<TraceEntry>, filecontent: Array<string>) {
+	public static createOrShow(extensionUri: vscode.Uri, traceData: Array<TraceEntry>, file: string, filecontent: Array<string>) {
 		const column = vscode.window.activeTextEditor
 			? vscode.window.activeTextEditor.viewColumn
 			: undefined;
@@ -174,11 +176,11 @@ class CatCodingPanel {
 			getWebviewOptions(extensionUri),
 		);
 
-		CatCodingPanel.currentPanel = new CatCodingPanel(panel, extensionUri, traceData, filecontent);
+		CatCodingPanel.currentPanel = new CatCodingPanel(panel, extensionUri, traceData, file, filecontent);
 	}
 
-	public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
-		CatCodingPanel.currentPanel = new CatCodingPanel(panel, extensionUri, [], []);
+	public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, traceData: Array<TraceEntry>, file: string, fileContent: Array<string>) {
+		CatCodingPanel.currentPanel = new CatCodingPanel(panel, extensionUri, traceData, file, fileContent);
 	}
 
 	private spillMessages() {
@@ -193,15 +195,17 @@ class CatCodingPanel {
 		}
 	}
 
-	private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, traceData: Array<TraceEntry>, filecontent: Array<string>) {
+	private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, traceData: Array<TraceEntry>, file: string, filecontent: Array<string>) {
 		this._panel = panel;
 		this._extensionUri = extensionUri;
 		this._traceData = traceData;
 		this._filecontent = filecontent;
+		this._file = file;
 
 		const messageData = {
 			"trace": this._traceData,
-			"content": this._filecontent
+			"content": this._filecontent,
+			"file": this._file
 		};
 
 		console.log('sending start message');
@@ -272,11 +276,9 @@ class CatCodingPanel {
 
 		try {
 			const script = fs.readFileSync(scriptPath.fsPath).toString('base64');
-			console.log(script);
 			const html = fs.readFileSync(indexPath.fsPath).toString('utf-8').
 				replace(/@@NONCE@@/g, nonce).
 				replace(/@@SCRIPT@@/g, script);
-			console.log('read file',indexPath,html);
 			return html;
 		} catch(e) {
 			return `<html><body><h1>Error ${e}</h1></body></html>`;
