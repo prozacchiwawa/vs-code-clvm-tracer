@@ -11,7 +11,8 @@ module.exports = {
 		'plugin:@typescript-eslint/recommended',
 	],
 	ignorePatterns: [
-		'media'
+		'media',
+		'media/public/index.html'
 	],
 	rules: {
 		'semi': [2, "always"],

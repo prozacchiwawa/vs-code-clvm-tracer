@@ -62,7 +62,7 @@ class TraceEntry {
 
 export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
-		vscode.commands.registerCommand('catCoding.start', () => {
+		vscode.commands.registerCommand('clvmTrace.start', () => {
 			const tracetext = vscode.window.activeTextEditor?.document.getText();
 			const trace_entries: Array<TraceEntry> = [];
 			let file = "";
@@ -106,7 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 						const split = fdata.split('\n');
 						if (split) {
-							CatCodingPanel.createOrShow(context.extensionUri, trace_entries, file, split);
+							CLVMTracePanel.createOrShow(context.extensionUri, trace_entries, file, split);
 						}
 					});
 				}
@@ -116,12 +116,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 	if (vscode.window.registerWebviewPanelSerializer) {
 		// Make sure we register a serializer in activation event
-		vscode.window.registerWebviewPanelSerializer(CatCodingPanel.viewType, {
+		vscode.window.registerWebviewPanelSerializer(CLVMTracePanel.viewType, {
 			async deserializeWebviewPanel(webviewPanel: vscode.WebviewPanel, state: any) {
 				console.log(`Got state: ${state}`);
 				// Reset the webview options so we use latest uri for `localResourceRoots`.
 				webviewPanel.webview.options = getWebviewOptions(context.extensionUri);
-				CatCodingPanel.revive(webviewPanel, context.extensionUri, state.trace, state.file, state.content);
+				CLVMTracePanel.revive(webviewPanel, context.extensionUri, state.trace, state.file, state.content);
 			}
 		});
 	}
@@ -140,13 +140,13 @@ function getWebviewOptions(extensionUri: vscode.Uri): vscode.WebviewOptions {
 /**
  * Manages cat coding webview panels
  */
-class CatCodingPanel {
+class CLVMTracePanel {
 	/**
 	 * Track the currently panel. Only allow a single panel to exist at a time.
 	 */
-	public static currentPanel: CatCodingPanel | undefined;
+	public static currentPanel: CLVMTracePanel | undefined;
 
-	public static readonly viewType = 'catCoding';
+	public static readonly viewType = 'clvmTrace';
 
 	private readonly _panel: vscode.WebviewPanel;
 	private readonly _extensionUri: vscode.Uri;
@@ -163,24 +163,24 @@ class CatCodingPanel {
 			: undefined;
 
 		// If we already have a panel, show it.
-		if (CatCodingPanel.currentPanel) {
-			CatCodingPanel.currentPanel._panel.reveal(column);
+		if (CLVMTracePanel.currentPanel) {
+			CLVMTracePanel.currentPanel._panel.reveal(column);
 			return;
 		}
 
 		// Otherwise, create a new panel.
 		const panel = vscode.window.createWebviewPanel(
-			CatCodingPanel.viewType,
+			CLVMTracePanel.viewType,
 			'CLVM Trace',
 			column || vscode.ViewColumn.One,
 			getWebviewOptions(extensionUri),
 		);
 
-		CatCodingPanel.currentPanel = new CatCodingPanel(panel, extensionUri, traceData, file, filecontent);
+		CLVMTracePanel.currentPanel = new CLVMTracePanel(panel, extensionUri, traceData, file, filecontent);
 	}
 
 	public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, traceData: Array<TraceEntry>, file: string, fileContent: Array<string>) {
-		CatCodingPanel.currentPanel = new CatCodingPanel(panel, extensionUri, traceData, file, fileContent);
+		CLVMTracePanel.currentPanel = new CLVMTracePanel(panel, extensionUri, traceData, file, fileContent);
 	}
 
 	private spillMessages() {
@@ -238,7 +238,7 @@ class CatCodingPanel {
 	}
 
 	public dispose() {
-		CatCodingPanel.currentPanel = undefined;
+		CLVMTracePanel.currentPanel = undefined;
 
 		// Clean up our resources
 		this._panel.dispose();

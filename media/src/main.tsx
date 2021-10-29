@@ -76,9 +76,9 @@ const TraceEntry = createElmishComponent({
 	view: state => {
 		const classname = state.selected ? 'nav-item-selected' : 'nav-item';
 		if (state.entry.file !== "") {
-			return <span className={classname}><a onClick={() => {state.parent([{select:state.entry}])}}><pre>{state.entry.content}</pre></a></span>;
+			return <span className={classname}><a onClick={() => {state.parent([{select:state.entry}])}}><pre className='selected-nav-color'>{state.entry.content}</pre></a></span>;
 		} else {
-			return <span className={classname}><pre>{state.entry.content}</pre></span>;
+			return <span className={classname}><pre className='nav-color'>{state.entry.content}</pre></span>;
 		}
 	}
 });
