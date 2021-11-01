@@ -35,6 +35,7 @@ class TraceEntry {
 
 		const oploc = entry['Operator-Location'];
 		const resloc = entry['Result-Location'];
+		const floc = entry['Failure-Location'];
 		let matched: RegExpMatchArray|undefined = undefined;
 
 		try {
@@ -43,6 +44,9 @@ class TraceEntry {
 			}
 			if (!matched && oploc) {
 				matched = oploc.match(match_srcloc);
+			}
+			if (!matched && floc) {
+				matched = floc.match(match_srcloc);
 			}
 			if (matched) {
 				this.file = matched[1];

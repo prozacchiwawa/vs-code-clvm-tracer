@@ -1,34 +1,10 @@
-# Cat Coding — A Webview API Sample
+# A VS code examining chialisp code traces from clvm_tools_rs' cldb
 
-Demonstrates VS Code's [webview API](https://code.visualstudio.com/api/extension-guides/webview). This includes:
+[https://prozacchiwawa.github.io/clvm_tools_rs/](clvm_tools_rs) contains user oriented tools
+for working with chialisp code.
 
-- Creating and showing a basic webview.
-- Dynamically updating a webview's content.
-- Loading local content in a webview.
-- Running scripts in a webview.
-- Sending message from an extension to a webview.
-- Sending messages from a webview to an extension.
-- Using a basic content security policy.
-- Webview lifecycle and handling dispose.
-- Saving and restoring state when the panel goes into the background.
-- Serialization and persistence across VS Code reboots.
-
-## Demo
-
-![demo](demo.gif)
-
-## VS Code API
-
-### `vscode` module
-
-- [`window.createWebviewPanel`](https://code.visualstudio.com/api/references/vscode-api#window.createWebviewPanel)
-- [`window.registerWebviewPanelSerializer`](https://code.visualstudio.com/api/references/vscode-api#window.registerWebviewPanelSerializer)
-
-## Running the example
-
-- Open this example in VS Code 1.47+
-- `npm install`
-- `npm run watch` or `npm run compile`
-- `F5` to start debugging
-
-Run the `Cat Coding: Start cat coding session` to create the webview.
+In this case, executing the "View CLVM Trace' command in a text buffer containing trace output
+from clvm_tools_rs' cldb will show a web view that associates each entry with its location
+in the source file it was read from, allowing easier inspection of traces.  Arguments to each
+operation are given in the trace as well so tracking down errors or unexpected outputs should
+be a bit easier.
