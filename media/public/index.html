@@ -15,8 +15,23 @@
 			#root {
 				position: relative;
 				display: flex;
-				flex-direction: row;
+				flex-direction: column;
 				height: 100%;
+				width: 100%;
+			}
+
+			.tab-heading {
+				position: relative;
+				display: flex;
+				flex-direction: row;
+				width: 100%;
+				border-bottom: 1px dotted var(--vscode-editor-foreground);
+			}
+
+			.root-content {
+				position: relative;
+				display: flex;
+				flex-direction: row;
 				width: 100%;
 			}
 
@@ -24,7 +39,8 @@
 				position: relative;
 				display: flex;
 				flex-direction: column;
-				width: 40%;
+				width: 30%;
+				flex-shrink: 0;
 				height: 100vh;
 				overflow: auto;
 				background: var(--vscode-editor-background);
@@ -86,6 +102,37 @@
 
 			.nav-color {
 				color: var(--vscode-editor-selectionForeground);
+			}
+			
+			.hash-tree-entry {
+				position: relative;
+				left: 1rem;
+				margin: 1rem;
+			}
+
+			.source-pane {
+				padding: 0.25rem;
+				border: 0px;
+			}
+
+			.hash-pane {
+				padding: 0.25rem;
+				border: 0px;
+			}
+
+			.inactivate-hash-pane {
+				padding: 0.25rem;
+				border: 0px;
+			}
+
+			.tab-selected-true {
+				color: var(--vscode-editor-foreground);
+				background: var(--vscode-editor-wordHighlightBackground);
+			}
+
+			.tab-selected-false {
+				color: var(--vscode-editor-foreground);
+				background: var(--vscode-editor-background);
 			}
 		</style>
 	</head>

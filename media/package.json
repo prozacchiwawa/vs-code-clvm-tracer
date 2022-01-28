@@ -29,6 +29,7 @@
     "@ts-elmish/railway-effects": "^3.1.0",
     "@ts-elmish/react": "^3.1.0",
     "@welldone-software/why-did-you-render": "^6.2.1",
+    "big-integer": "^1.6.51",
     "deep-stub-object": "^0.0.7",
     "merge-anything": "^4.0.1",
     "mitt": "^3.0.0",

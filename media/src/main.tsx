@@ -4,7 +4,8 @@ import * as React from 'react'
 import { render } from 'react-dom'
 
 import { createElmishComponent } from '@ts-elmish/react'
-import { execPath } from 'process';
+import { execPath } from 'process'
+import * as bigint from 'big-integer'
 
 function sender(dispatch,f) {
 	return (e) => dispatch(f(e));
@@ -105,14 +106,85 @@ const Navigation = createElmishComponent({
 	}
 });
 
+const HashTreeEntry = createElmishComponent({
+	init: (code) => {
+		return [code, []];
+	},
+	update: (state, action) => {
+		return [state, []];
+	},
+	view: (state) => {
+		const thisEntry = state.trace[state.idx];
+		console.log({thisEntry});
+		const argRefsText = thisEntry.entry['Argument-Refs'];
+		console.log({argRefsText});
+		let valueBigint;
+		try {
+			valueBigint = bigint(thisEntry.entry.Value ? thisEntry.entry.Value : 0);
+		} catch (e) {
+			valueBigint = bigint(0);
+		}
+		if (valueBigint.leq(bigint(-1))) {
+			let length = valueBigint.bitLength();
+			const mod8 = length.mod(8);
+			if (mod8.neq(bigint(0))) {
+				length = length.plus(bigint(8).minus(mod8));
+			}
+			const subfrom = bigint(1).shiftLeft(length);
+			valueBigint = subfrom.plus(valueBigint);
+		}
+		const hexParsed = "0x" + valueBigint.toString(16);
+		console.log({hexParsed});
+		const argRefs = argRefsText ? argRefsText.split(',').map((e) => parseInt(e.trim())) : [];
+		console.log({argRefs});
+		const references =
+			argRefs ? 
+			<div>
+				{argRefs.map((i) => <HashTreeEntry idx={i} trace={state.trace} parent={state.parent}/>)}
+			</div> : <div></div>;
+
+		console.log({references});
+		return <div className="hash-tree-entry">
+			<div>Value Tree Entry</div>
+			<div>Hex: {hexParsed}</div>
+			<div>Value: {thisEntry.entry.Value}</div>
+			<div>Arguments: {thisEntry.entry.Arguments}</div>
+			{references}
+		</div>;
+	}
+});
+
+const HashView = createElmishComponent({
+	init: (code) => {
+		return [code, []];
+	},
+	update: (state,action) => {
+		return [state, []];
+	},
+	view: state => {
+		return <div>
+			<HashTreeEntry idx={state.idx} trace={state.trace} parent={state.parent} />
+		</div>;
+	}
+});
+
 const App = createElmishComponent({
 	init: (code) => {
 		return [code, []];
 	},
-	update: (state, action) => { 
+	update: (state, action) => {
+		console.log(action);
 		if (action[0].select) {
 			return [{
+        		pane: state.pane,
 				selection: action[0].select,
+				trace: state.trace,
+				content: state.content
+			}, []];
+		} else if (action[0].setpane !== undefined) {
+			return [{
+				pane: action[0].setpane,
+				selection: state.selection,
 				trace: state.trace,
 				content: state.content
 			}, []];
@@ -122,9 +194,23 @@ const App = createElmishComponent({
 	},
 	view: state => {
 		console.log('selection', JSON.stringify(state.selection));
+		let contentPane;
+		if (state.pane) {
+			contentPane = <HashView idx={state.selection.idx} trace={state.trace} parent={state.dispatch} />;
+		} else {
+			contentPane = <LinesOfCode selection={state.selection} file={state.file} code={state.content} />;
+		}
+		const sourcePaneStyle = `source-pane tab-selected-${!state.pane}`;
+		const hashPaneStyle = `hash-pane tab-selected-${state.pane}`;
 		return <div id='root'>
-			<Navigation selection={state.selection} trace={state.trace} parent={state.dispatch} />
-			<LinesOfCode selection={state.selection} file={state.file} code={state.content} />
+			<div className='tab-heading'>
+				<button onClick={() => {state.dispatch([{setpane: false}])}} className={sourcePaneStyle}>Source</button>
+				{state.selection ? <button onClick={() => {state.dispatch([{setpane: true}])}} className={hashPaneStyle}>Value tree</button> : <button disabled={true} className="inactive-hash-pane">Hash trace: no selection</button>}
+			</div>
+			<div className='root-content'>
+				<Navigation selection={state.selection} trace={state.trace} parent={state.dispatch} />
+				{contentPane}
+			</div>
 		</div>
 	}
 });
@@ -133,7 +219,7 @@ let rendered = false;
 function renderView(state) {
 	vscode.setState(state);
 	// eslint-disable-next-line functional/no-expression-statement
-	render(<App file={state.file} trace={state.trace} content={state.content} />, document.getElementById('app'));
+	render(<App pane={false} file={state.file} trace={state.trace} content={state.content} />, document.getElementById('app'));
 }
 
 setTimeout(() => {
